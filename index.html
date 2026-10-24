@@ -547,7 +547,7 @@ const ROUND_BASE = [
 ];
 const BOSS_SKINS = [
   // hpMul/dmgMul: độ trâu & độ đau · dodge: tỉ lệ né · dstyle: kiểu né · phue: màu chưởng (tạm, chờ ảnh riêng) · diff: độ khó 1-5
-  {key:'classic', emoji:'🦖', title:'KHỦNG LONG',        sizeFix:0.87, bg:'sunset',  hpMul:0.85, dmgMul:0.85, dodge:0,    dstyle:'',      phue:-80,  diff:1},
+  {key:'classic', emoji:'🦖', title:'KHỦNG LONG',        sizeFix:0.87, bg:'sunset',  hpMul:0.85, dmgMul:0.85, dodge:0, dstyle:'jump',      phue:-80,  diff:1},
   {key:'magma',   emoji:'🐲', title:'QUÁI THÚ LỬA',       sizeFix:1.03, bg:'volcano', hpMul:1.00, dmgMul:1.10, dodge:0.06, dstyle:'curl',  phue:180,  diff:2},
   {key:'robo',    emoji:'🤖', title:'KHỦNG LONG RÔ-BỐT',  sizeFix:0.97, bg:'neon',    hpMul:1.10, dmgMul:1.00, dodge:0.10, dstyle:'duck',  phue:10,   diff:3},
   {key:'thunder', emoji:'🌩️', title:'BẠO CHÚA SẤM SÉT',   sizeFix:1.07, bg:'storm',   hpMul:1.15, dmgMul:1.15, dodge:0.08, dstyle:'lie',   phue:-120, diff:3},
@@ -651,6 +651,18 @@ const PETS={
   cao:     {name:'Cáo Pháo Hoa',       icon:'🦊', price:45, desc:'Đại chưởng nổ pháo hoa +10'},
   kylan:   {name:'Kỳ Lân Cầu Vồng',    icon:'🦄', price:60, desc:'Hồi máu, 10% tự né, chưởng +1'}
 };
+/* Hạng theo giá: 5 con rẻ nhất = Đồng, 5 con giữa = Bạc, 5 con đắt nhất = Vàng.
+   Hộ thân (mọi pet đều có): +sát thương mỗi quả chưởng và hồi máu mỗi 6 giây, hạng càng cao càng mạnh. */
+const PET_TIERS=[
+  {name:'Đồng', medal:'🥉', dmg:1, heal:1},
+  {name:'Bạc',  medal:'🥈', dmg:2, heal:2},
+  {name:'Vàng', medal:'🥇', dmg:3, heal:3}
+];
+function petTier(k){
+  const order=Object.keys(PETS).sort((a,b)=>PETS[a].price-PETS[b].price);
+  return PET_TIERS[Math.min(2,Math.floor(order.indexOf(k)/5))];
+}
+function petGuardText(k){ const t=petTier(k); return `${t.medal} Hộ thân hạng ${t.name}: chưởng +${t.dmg}, hồi ${t.heal} máu mỗi 6 giây`; }
 function petArt(k,pose){ return IMG.pets && IMG.pets[k] && IMG.pets[k][pose]; }
 function petActive(k){ return SAVE.activePet===k; }
 function rollPet(){
@@ -1089,7 +1101,8 @@ function heroAttack(mega=false){
       } else hitBoss(MEGA_DMG, br);
     },500);
   } else {
-    const dmg=HIT_DMG+Math.min(6,Math.floor(G.combo/3))+(petActive('rong')?2:0)+(petActive('kylan')?1:0);
+    const guard=SAVE.activePet?petTier(SAVE.activePet).dmg:0;          // hộ thân: mọi pet đều tăng sát thương
+    const dmg=HIT_DMG+Math.min(6,Math.floor(G.combo/3))+guard+(petActive('rong')?2:0)+(petActive('kylan')?1:0);
     const dmgStyle=petActive('rong')?'fire':'';
     const fireShot=(isSecond)=>{
       const dodge=bossWillDodge();
@@ -1112,10 +1125,18 @@ function heroAttack(mega=false){
     }
   }
 }
-function bossWillDodge(){
+/* Tỉ lệ né theo MÁU:
+   - boss máu gốc càng nhiều (hpMul 0.85 -> 1.5) né càng giỏi: 5% -> 18%
+   - trong trận, máu còn càng ít thì càng mệt, né càng ít: còn đầy máu né 100% tỉ lệ, sắp chết chỉ còn 35% */
+function bossDodgeRate(){
   const sk=curSkin();
-  if(!sk.dodge || G.lastDodged || performance.now()<G.frozenUntil){ G.lastDodged=false; return false; }
-  const d=Math.random()<sk.dodge; G.lastDodged=d; return d;    // không bao giờ né 2 phát liên tiếp
+  const base=0.05+Math.max(0,(sk.hpMul-0.85))/(1.5-0.85)*0.13;
+  const pct=Math.max(0,G.bossHp)/G.bossMax;
+  return base*(0.35+0.65*pct);
+}
+function bossWillDodge(){
+  if(G.lastDodged || performance.now()<G.frozenUntil){ G.lastDodged=false; return false; }
+  const d=Math.random()<bossDodgeRate(); G.lastDodged=d; return d;    // không bao giờ né 2 phát liên tiếp
 }
 function bossDodgeAnim(){
   if(G.mode==='over') return;
@@ -1358,6 +1379,7 @@ function petTick(){                                    // chạy mỗi giây tro
   G.petT++;
   const t=G.petT, hr=()=>rect($('#hero')), br=()=>rect($('#boss'));
   const heal=(n)=>{ if(G.heroHp>=100) return false; G.heroHp=Math.min(100,G.heroHp+n); setHp(); const r=hr(); dmgNum(r.left+r.width*0.4, r.top, '+'+n, 'heal'); return true; };
+  if(t%6===0){ if(heal(petTier(k).heal)) setPetPose('cheer',500); }   // hộ thân: mọi pet đều hồi máu
   if(k==='domdom' && t%5===0){ if(heal(2)) setPetPose('skill',700); }
   if(k==='kylan'  && t%4===0){ if(heal(1)) setPetPose('skill',500); }
   if(k==='doi' && t%7===0){
@@ -1591,21 +1613,21 @@ function renderPetShelf(){
     const cls='petcard'+(owned?' owned':' unknown')+(petActive(k)?' equip':'')+(!owned?(can?' can':' cant'):'');
     const art=petArt(k,'idle');
     const pic= art?`<img src="${art}" alt="">`:`<span class="pe">${pt.icon}</span>`;
-    return `<div class="${cls}" data-pet="${k}" title="${pt.name}: ${pt.desc}">${pic}
-      <b>${pt.name}</b><span class="price">${owned?(petActive(k)?'Đang mang':'Đã có'):'⭐ '+pt.price}</span></div>`;
+    return `<div class="${cls}" data-pet="${k}" title="${pt.name} — ${petGuardText(k)} · Đặc biệt: ${pt.desc}">${pic}
+      <b>${pt.name}</b><span class="price">${petTier(k).medal} ${owned?(petActive(k)?'Đang mang':'Đã có'):'⭐ '+pt.price}</span></div>`;
   }).join('');
   $('#petshelf').querySelectorAll('.petcard').forEach(el=>el.addEventListener('click',()=>{
     const k=el.dataset.pet, pt=PETS[k];
     if(!SAVE.pets[k]){
-      if(starsAvail()<pt.price){ SFX.wrong(); showTip(`${pt.icon} ${pt.name} — ${pt.desc}<br>Cần <b>${pt.price} ⭐</b>, con đang có <b>${starsAvail()} ⭐</b>`); return; }
+      if(starsAvail()<pt.price){ SFX.wrong(); showTip(`${pt.icon} ${pt.name}<br>${petGuardText(k)}<br>✨ Đặc biệt: ${pt.desc}<br>Cần <b>${pt.price} ⭐</b>, con đang có <b>${starsAvail()} ⭐</b>`); return; }
       SAVE.spent+=pt.price; SAVE.pets[k]=true; SAVE.activePet=k;
       persist(); SFX.unlock(); confetti(40);
-      showTip(`🎉 Đã mua <b>${pt.icon} ${pt.name}</b>!<br>${pt.desc}`);
+      showTip(`🎉 Đã mua <b>${pt.icon} ${pt.name}</b>!<br>${petGuardText(k)}<br>✨ Đặc biệt: ${pt.desc}`);
       refreshMenu(); return;
     }
     SAVE.activePet = petActive(k) ? null : k;
     persist(); SFX.good(); renderPetShelf();
-    if(SAVE.activePet) showTip(`${pt.icon} <b>${pt.name}</b> sẽ đi cùng con!<br>${pt.desc}`);
+    if(SAVE.activePet) showTip(`${pt.icon} <b>${pt.name}</b> sẽ đi cùng con!<br>${petGuardText(k)}<br>✨ Đặc biệt: ${pt.desc}`);
   }));
 }
 function showTip(html){
