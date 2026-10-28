@@ -17,7 +17,7 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden}
 /* Khóa khung trang: hiệu ứng nổ sát mép không được làm trang rộng ra (máy tính bảng Android sẽ tự thu nhỏ/phóng to cả trang) */
-html{touch-action:manipulation;overscroll-behavior:none}
+html{touch-action:manipulation;overscroll-behavior:none;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{position:fixed;inset:0;overscroll-behavior:none}
 body{
   font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
@@ -485,6 +485,7 @@ h1.logo small{display:block;font-size:.38em;color:var(--ink);letter-spacing:6px;
     <button class="mbtn" id="btnChest">🎁 Mở rương <small id="chestHint"></small></button>
     <button class="mbtn" id="btnMuseum">🏛️ Bảo tàng <small id="museumHint"></small></button>
     <button class="mbtn" id="btnBadges">🏅 Huy hiệu <small id="badgeHint"></small></button>
+    <button class="mbtn" id="btnFx">✨ Hiệu ứng: <b id="fxMode">…</b></button>
   </div>
   <div class="itembank" id="itembank"></div>
   <div class="shoptitle">🛒 CỬA HÀNG THÚ CƯNG <small>— bấm để mua, bấm lại để mang theo</small></div>
@@ -976,23 +977,36 @@ const $=s=>document.querySelector(s);
 /* ---- CHẤT LƯỢNG THEO THIẾT BỊ ----
    Q.lite = chế độ nhẹ: tablet / máy yếu. Tắt bóng đổ, giảm hạt, tắt đuôi.
    Có thể ép bằng ?lite=1 hoặc ?lite=0 trên URL để thử nghiệm. */
+const FX_KEY='dinoTyping.fx';     // lựa chọn tay ở menu: 'lite' | 'full' | (trống = tự nhận diện)
 const Q=(()=>{
   const u=new URLSearchParams(location.search);
-  const touch = navigator.maxTouchPoints>1;
+  const UA=navigator.userAgent;
+  const touch = (navigator.maxTouchPoints||0)>0 || ('ontouchstart' in window);
   const smallCores = (navigator.hardwareConcurrency||4) <= 4;
   const lowMem = (navigator.deviceMemory||4) <= 4;
-  const android = /Android/i.test(navigator.userAgent);
-  let lite = android || (touch && (smallCores||lowMem));
+  const android = /Android/i.test(UA) || /arm|aarch/i.test(navigator.platform||'');
+  // Galaxy Tab đời cao (≥10", RAM 8GB) mở Chrome ở "chế độ máy tính": chữ Android bị giấu, UA giả Linux,
+  // nhưng vẫn là màn cảm ứng → vẫn phải coi là máy tính bảng.
+  const tabletDesktopMode = touch && /Linux|X11|CrOS/i.test(UA) && !/Windows/i.test(UA);
+  let auto = android || tabletDesktopMode || (touch && (smallCores||lowMem));
+  let lite = auto, pick='';
+  try{ pick=localStorage.getItem(FX_KEY)||''; }catch(e){}
+  if(pick==='lite') lite=true;
+  if(pick==='full') lite=false;
   if(u.get('lite')==='1') lite=true;
   if(u.get('lite')==='0') lite=false;
-  return { lite,
-    particles: lite?0.4:1,      // tỉ lệ số hạt nổ
-    trail:     lite?0:1,        // đuôi lấp lánh (0 = tắt)
-    sparks:    lite?0.5:1,      // sao văng
-    trailMs:   lite?999999:45   // khoảng cách giữa 2 hạt đuôi
-  };
+  return { lite, auto, pick };
 })();
-if(Q.lite) document.documentElement.classList.add('lite');
+function applyFx(lite){
+  Q.lite=lite;
+  Q.particles = lite?0.4:1;      // tỉ lệ số hạt nổ
+  Q.trail     = lite?0:1;        // đuôi lấp lánh (0 = tắt)
+  Q.sparks    = lite?0.5:1;      // sao văng
+  Q.trailMs   = lite?999999:45;  // khoảng cách giữa 2 hạt đuôi
+  document.documentElement.classList.toggle('lite',lite);
+  const b=document.getElementById('fxMode'); if(b) b.textContent = lite?'Nhẹ':'Đầy đủ';
+}
+applyFx(Q.lite);
 /* ---- HỒ SƠ TIẾN TRÌNH: lưu trong localStorage, giữ tương thích số sao cũ ---- */
 const SAVE_KEY='dinoTyping.save';
 function loadSave(){
@@ -2219,6 +2233,27 @@ $('#btnChestBack').addEventListener('click',()=>goMenu());
 $('#btnMuseum').addEventListener('click',()=>{ ac(); openMuseum(); });
 $('#btnMuseumBack').addEventListener('click',()=>goMenu());
 $('#btnBadges').addEventListener('click',()=>{ ac(); openBadges(); });
+// Nút chọn hiệu ứng: lưu riêng trên từng máy (Tab chọn Nhẹ, MacBook chọn Đầy đủ)
+$('#btnFx').addEventListener('click',()=>{ ac(); const lite=!Q.lite; applyFx(lite);
+  Q.pick=lite?'lite':'full'; try{ localStorage.setItem(FX_KEY, Q.pick); }catch(e){} });
+/* ---- ĐO KIỂM TRÊN MÁY THẬT: mở link kèm ?debug=1 ----
+   Góc trên trái hiện: chế độ, khổ màn hình, độ phóng trang, số khung hình/giây.
+   Nếu trang từng bị phóng/thu, ô "zoom thấp nhất" sẽ khác 1.00 và "rộng nhất" sẽ lớn hơn khổ màn. */
+if(new URLSearchParams(location.search).get('debug')==='1'){
+  const d=document.createElement('div');
+  d.style.cssText='position:fixed;left:6px;top:6px;z-index:999;background:rgba(0,0,0,.75);color:#7f7;font:12px/1.35 monospace;padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre';
+  document.body.appendChild(d);
+  let frames=0,last=performance.now(),fps=0,minZoom=9,maxZoom=0,maxW=0,minFps=99,slow=0;
+  const vv=window.visualViewport;
+  (function loop(now){ frames++; if(now-last>=500){ fps=Math.round(frames*1000/(now-last)); frames=0; last=now; if(G&&G.mode!=='idle') minFps=Math.min(minFps,fps);
+      const z=vv?vv.scale:1; minZoom=Math.min(minZoom,z); maxZoom=Math.max(maxZoom,z); maxW=Math.max(maxW,document.documentElement.scrollWidth);
+      d.textContent='Hiệu ứng: '+(Q.lite?'NHẸ':'ĐẦY ĐỦ')+(Q.pick?' (chọn tay)':' (tự nhận)')+'\n'+
+        'Màn: '+innerWidth+'×'+innerHeight+'  rộng nhất: '+maxW+'\n'+
+        'Zoom: '+z.toFixed(2)+'  thấp/cao nhất: '+minZoom.toFixed(2)+'/'+maxZoom.toFixed(2)+'\n'+
+        'Khung/giây: '+fps+'  thấp nhất khi đánh: '+(minFps===99?'-':minFps)+'\n'+
+        (/Android/i.test(navigator.userAgent)?'Trình duyệt: chế độ di động':'Trình duyệt: chế độ MÁY TÍNH'); }
+    requestAnimationFrame(loop); })(performance.now());
+}
 $('#btnBadgesBack').addEventListener('click',()=>goMenu());
 function goMenu(){
   clearTimeout(G.vsTmr); G.vsToken=(G.vsToken||0)+1; $('#vs').className=''; G.mode='idle'; stopBattleTimers();
