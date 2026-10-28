@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Khủng Long Đại Chiến — Typing Battle</title>
 <style>
 :root{
@@ -16,6 +16,9 @@
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;overflow:hidden}
+/* Khóa khung trang: hiệu ứng nổ sát mép không được làm trang rộng ra (máy tính bảng Android sẽ tự thu nhỏ/phóng to cả trang) */
+html{touch-action:manipulation;overscroll-behavior:none}
+body{position:fixed;inset:0;overscroll-behavior:none}
 body{
   font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;
   background:linear-gradient(180deg,var(--sky-top) 0%,var(--sky-mid) 34%,var(--sky-low) 58%,var(--sky-glow) 72%,var(--ground-top) 72.2%,var(--ground) 100%);
@@ -1919,7 +1922,7 @@ function startBattle(round){
   $('#vsBoss').src=IMG.bosses[G.bossSkin].growl||IMG.bosses[G.bossSkin].idle;
   $('#vsBossName').textContent=bossTitle;
   const mvs= G.bossSkin==='longvuong' ? '3 GIAI ĐOẠN · dùng chiêu của mọi boss · NỔI ĐIÊN' : (BOSS_MOVES[G.bossSkin]||[]).map(m=>MOVE_INFO[m].label).join(' · ');
-  $('#vsBossName').innerHTML=bossTitle+(mvs?`<div style="font-size:.55em;color:#ffd0d0;margin-top:4px">Chiêu: ${mvs}${G.bossSkin==='gold'?' · 👑 NỔI ĐIÊN':''}</div>`:'');
+  $('#vsBossName').innerHTML=bossTitle+(mvs?`<div style="font-size:.55em;color:#ffd0d0;margin:4px auto 0;white-space:normal;max-width:42vw;line-height:1.25">Chiêu: ${mvs}${G.bossSkin==='gold'?' · 👑 NỔI ĐIÊN':''}</div>`:'');
   if(skin.final){ $('#vsRound').textContent='⚔️ TRẬN CUỐI · BOSS TỐI THƯỢNG ⚔️'; }
   $('#vsRound').textContent='TRẬN '+(round+1)+' / '+ROUND_BASE.length+' · LEVEL '+(G.level+1)+' · ĐỘ KHÓ '+'★'.repeat(skin.diff)+'☆'.repeat(5-skin.diff);
   vs.className='on';
